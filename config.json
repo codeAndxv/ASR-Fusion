@@ -1,0 +1,6 @@
+{
+    "model_type": "faster-whisper",
+    "model_size": "small",
+    "device": "cpu",
+    "compute_type": "int8"
+}

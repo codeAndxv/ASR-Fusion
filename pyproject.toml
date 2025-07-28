@@ -1,0 +1,31 @@
+[project]
+name = "asr-fusion"
+version = "0.1.0"
+description = "ASR Fusion - A Python package for audio transcription using multiple ASR models"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "faster-whisper>=1.0.0",
+    "funasr>=1.0.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "python-multipart>=0.0.6",
+]
+authors = [
+    {name = "ASR Fusion Developers"}
+]
+keywords = ["asr", "speech-recognition", "whisper", "funasr", "audio-transcription"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.scripts]
+asr-fusion = "main:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/asr-fusion"
+Repository = "https://github.com/your-username/asr-fusion"
