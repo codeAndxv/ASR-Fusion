@@ -1,7 +1,8 @@
 import asyncio
-
 from collections.abc import Generator, Iterable
+import logging
 from typing import Annotated, Literal
+
 from fastapi import (
     APIRouter,
     Form,
@@ -9,10 +10,99 @@ from fastapi import (
     Request,
     Response,
 )
-from asr_fusion.dependencies import AudioFileDependency, ConfigDependency
+from fastapi.responses import StreamingResponse
+from faster_whisper.transcribe import BatchedInferencePipeline, TranscriptionInfo
+from huggingface_hub.utils._cache_manager import _scan_cached_repo
+
+from asr_fusion.api_types import (
+    DEFAULT_TIMESTAMP_GRANULARITIES,
+    TIMESTAMP_GRANULARITIES_COMBINATIONS,
+    CreateTranscriptionResponseJson,
+    CreateTranscriptionResponseVerboseJson,
+    TimestampGranularities,
+    TranscriptionSegment,
+)
+from asr_fusion.dependencies import AudioFileDependency, ConfigDependency, WhisperModelManagerDependency
+from asr_fusion.executors.whisper import utils as whisper_utils
+from asr_fusion.hf_utils import (
+    MODEL_CARD_DOESNT_EXISTS_ERROR_MESSAGE,
+    get_model_card_data_from_cached_repo_info,
+    get_model_repo_path,
+)
+from asr_fusion.model_aliases import ModelId
+from asr_fusion.text_utils import segments_to_srt, segments_to_text, segments_to_vtt
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["automatic-speech-recognition"])
 
-@router.post("/v1/audio/translations")
+type ResponseFormat = Literal["text", "json", "verbose_json", "srt", "vtt"]
+
+# https://platform.openai.com/docs/api-reference/audio/createTranscription#audio-createtranscription-response_format
+DEFAULT_RESPONSE_FORMAT: ResponseFormat = "json"
+
+
+def segments_to_response(
+    segments: Iterable[TranscriptionSegment],
+    transcription_info: TranscriptionInfo,
+    response_format: ResponseFormat,
+) -> Response:
+    segments = list(segments)
+    match response_format:
+        case "text":
+            return Response(segments_to_text(segments), media_type="text/plain")
+        case "json":
+            return Response(
+                CreateTranscriptionResponseJson.from_segments(segments).model_dump_json(),
+                media_type="application/json",
+            )
+        case "verbose_json":
+            return Response(
+                CreateTranscriptionResponseVerboseJson.from_segments(segments, transcription_info).model_dump_json(),
+                media_type="application/json",
+            )
+        case "vtt":
+            return Response(
+                "".join(segments_to_vtt(segment, i) for i, segment in enumerate(segments)), media_type="text/vtt"
+            )
+        case "srt":
+            return Response(
+                "".join(segments_to_srt(segment, i) for i, segment in enumerate(segments)), media_type="text/plain"
+            )
+
+
+def format_as_sse(data: str) -> str:
+    return f"data: {data}\n\n"
+
+
+def segments_to_streaming_response(
+    segments: Iterable[TranscriptionSegment],
+    transcription_info: TranscriptionInfo,
+    response_format: ResponseFormat,
+) -> StreamingResponse:
+    def segment_responses() -> Generator[str, None, None]:
+        for i, segment in enumerate(segments):
+            if response_format == "text":
+                data = segment.text
+            elif response_format == "json":
+                data = CreateTranscriptionResponseJson.from_segments([segment]).model_dump_json()
+            elif response_format == "verbose_json":
+                data = CreateTranscriptionResponseVerboseJson.from_segment(
+                    segment, transcription_info
+                ).model_dump_json()
+            elif response_format == "vtt":
+                data = segments_to_vtt(segment, i)
+            elif response_format == "srt":
+                data = segments_to_srt(segment, i)
+            yield format_as_sse(data)
+
+    return StreamingResponse(segment_responses(), media_type="text/event-stream")
+
+
+@router.post(
+    "/v1/audio/translations",
+    response_model=str | CreateTranscriptionResponseJson | CreateTranscriptionResponseVerboseJson,
+)
 def translate_file(
     config: ConfigDependency,
     model_manager: WhisperModelManagerDependency,
@@ -42,6 +132,19 @@ def translate_file(
             return segments_to_streaming_response(segments, transcription_info, response_format)
         else:
             return segments_to_response(segments, transcription_info, response_format)
+
+
+# HACK: Since Form() doesn't support `alias`, we need to use a workaround.
+async def get_timestamp_granularities(request: Request) -> TimestampGranularities:
+    form = await request.form()
+    if form.get("timestamp_granularities[]") is None:
+        return DEFAULT_TIMESTAMP_GRANULARITIES
+    timestamp_granularities = form.getlist("timestamp_granularities[]")
+    assert timestamp_granularities in TIMESTAMP_GRANULARITIES_COMBINATIONS, (
+        f"{timestamp_granularities} is not a valid value for `timestamp_granularities[]`."
+    )
+    return timestamp_granularities  # type: ignore[return-value]
+
 
 # https://platform.openai.com/docs/api-reference/audio/createTranscription
 # https://github.com/openai/openai-openapi/blob/master/openapi.yaml#L8915
@@ -114,23 +217,3 @@ def transcribe_file(
             status_code=404,
             detail=f"Model '{model}' is not supported. If you think this is a mistake, please open an issue.",
         )
-
-def segments_to_streaming_response(segments, transcription_info, response_format):
-    def segment_responses() -> Generator[str, None, None]:
-        for i, segment in enumerate(segments):
-            if response_format == "text":
-                data = segment.text
-            elif response_format == "json":
-                data = CreateTranscriptionResponseJson.from_segments([segment]).model_dump_json()
-            elif response_format == "verbose_json":
-                data = CreateTranscriptionResponseVerboseJson.from_segment(
-                    segment, transcription_info
-                ).model_dump_json()
-            elif response_format == "vtt":
-                data = segments_to_vtt(segment, i)
-            elif response_format == "srt":
-                data = segments_to_srt(segment, i)
-            yield format_as_sse(data)
-
-    return StreamingResponse(segment_responses(), media_type="text/event-stream")
-

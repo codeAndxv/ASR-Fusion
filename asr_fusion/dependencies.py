@@ -20,8 +20,8 @@ from openai.resources.audio import AsyncSpeech, AsyncTranscriptions
 from openai.resources.chat.completions import AsyncCompletions
 
 from asr_fusion.config import Config
+from asr_fusion.executors.whisper.model_manager import WhisperModelManager
 
-from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # NOTE: `get_config` is called directly instead of using sub-dependencies so that these functions could be used outside of `FastAPI`
@@ -36,8 +36,14 @@ def get_config() -> Config:
 
 ConfigDependency = Annotated[Config, Depends(get_config)]
 
-security = HTTPBearer()
+@lru_cache
+def get_model_manager() -> WhisperModelManager:
+    config = get_config()
+    return WhisperModelManager(config.whisper)
 
+WhisperModelManagerDependency = Annotated[WhisperModelManager, Depends(get_model_manager)]
+
+security = HTTPBearer()
 
 async def verify_api_key(
     config: ConfigDependency, credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
@@ -85,7 +91,7 @@ def get_completion_client() -> AsyncCompletions:
     oai_client = AsyncOpenAI(
         base_url=config.chat_completion_base_url,
         api_key=config.chat_completion_api_key.get_secret_value(),
-        max_retries=1,
+        max_retries=0,
     )
     return oai_client.chat.completions
 
@@ -94,40 +100,11 @@ CompletionClientDependency = Annotated[AsyncCompletions, Depends(get_completion_
 
 
 @lru_cache
-def get_speech_client() -> AsyncSpeech:
-    config = get_config()
-    if config.loopback_host_url is None:
-        # this might not work as expected if `speech_router` won't have shared state (access to the same `model_manager`) with the main FastAPI `app`. TODO: verify
-        from speaches.routers.speech import (
-            router as speech_router,
-        )
-
-        http_client = AsyncClient(
-            transport=ASGITransport(speech_router),
-            base_url="http://test/v1",
-        )  # NOTE: "test" can be replaced with any other value
-    else:
-        http_client = AsyncClient(
-            base_url=f"{config.loopback_host_url}/v1",
-        )
-    oai_client = AsyncOpenAI(
-        http_client=http_client,
-        api_key=config.api_key.get_secret_value() if config.api_key else "cant-be-empty",
-        max_retries=1,
-        base_url=f"{config.loopback_host_url}/v1",
-    )
-    return oai_client.audio.speech
-
-
-SpeechClientDependency = Annotated[AsyncSpeech, Depends(get_speech_client)]
-
-
-@lru_cache
 def get_transcription_client() -> AsyncTranscriptions:
     config = get_config()
     if config.loopback_host_url is None:
         # this might not work as expected if `stt_router` won't have shared state (access to the same `model_manager`) with the main FastAPI `app`. TODO: verify
-        from speaches.routers.stt import (
+        from asr_fusion.routers.stt import (
             router as stt_router,
         )
 
@@ -142,40 +119,10 @@ def get_transcription_client() -> AsyncTranscriptions:
     oai_client = AsyncOpenAI(
         http_client=http_client,
         api_key=config.api_key.get_secret_value() if config.api_key else "cant-be-empty",
-        max_retries=1,
+        max_retries=0,
         base_url=f"{config.loopback_host_url}/v1",
     )
     return oai_client.audio.transcriptions
 
 
 TranscriptionClientDependency = Annotated[AsyncTranscriptions, Depends(get_transcription_client)]
-
-
-
-from pydantic import BeforeValidator, Field
-
-MODEL_ID_ALIASES_PATH = Path("model_aliases.json")  # TODO: make configurable
-
-
-@lru_cache
-def load_model_id_aliases() -> dict[str, str]:
-    return json.loads(MODEL_ID_ALIASES_PATH.read_text())
-
-
-def resolve_model_id_alias(model_id: str) -> str:
-    model_id_aliases = load_model_id_aliases()
-    return model_id_aliases.get(model_id, model_id)
-
-
-ModelId = Annotated[
-    str,
-    BeforeValidator(resolve_model_id_alias),
-    Field(
-        min_length=1,
-        description="The ID of the model. You can get a list of available models by calling `/v1/models`.",
-        examples=[
-            "Systran/faster-distil-whisper-large-v3",
-            "bofenghuang/whisper-large-v2-cv11-french-ct2",
-        ],
-    ),
-]
