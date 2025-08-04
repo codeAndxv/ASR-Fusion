@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
 
-    from speaches.api_types import TranscriptionSegment
+    from asr_fusion.api_types import TranscriptionSegment
 
 
 class TextChunker(Protocol):
