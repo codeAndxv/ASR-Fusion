@@ -11,6 +11,9 @@ dependencies = [
     "torch>=2.7.1",
     "websocket>=0.2.1",
     "websockets>=15.0.1",
+    "openai>=1.98.0",
+    "pydantic-settings>=2.10.1",
+    "pydantic>=2.11.7",
 ]
 authors = [
     {name = "ASR Fusion Developers"}
