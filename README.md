@@ -125,3 +125,5 @@ python main.py --transcribe audio.wav --model-type funasr --model-size small
 - fastapi
 - uvicorn
 - python-multipart
+
+
