@@ -8,7 +8,7 @@ import os
 # Add parent directory to path to import asr_fusion
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from asr_fusion import ASRFusionClient
+from client.transcriber import ASRFusionClient
 
 def main():
     # Initialize client

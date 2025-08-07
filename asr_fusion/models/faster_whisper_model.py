@@ -2,7 +2,11 @@ from faster_whisper import WhisperModel
 from typing import Dict, Any, Generator
 import os
 
-class FasterWhisperModel:
+class ASRModel:
+    def __init(self, model_name: str):
+        self.model_name = model_name
+
+class FasterWhisperModel(ASRModel):
     def __init__(self, model_name: str, model_path: str = ".", device: str = "cpu", compute_type: str = "int8"):
         """
         Initialize FasterWhisper model
@@ -13,14 +17,12 @@ class FasterWhisperModel:
             device: Device to run the model on ("cpu" or "cuda")
             compute_type: Compute type for the model ("int8", "float16", etc.)
         """
-        self.model_name = model_name
+        super().__init__(model_name)
         self.model_path = model_path
         self.device = device
         self.compute_type = compute_type
-        
-        # Initialize the model
-        full_model_path = os.path.join(model_path, model_name) if model_path else model_name
-        self.model = WhisperModel(full_model_path, device=device, compute_type=compute_type)
+
+        self.model = WhisperModel(model_path, device=device, compute_type=compute_type)
     
     def transcribe_file(self, audio_file_path: str, **kwargs) -> Dict[str, Any]:
         """
