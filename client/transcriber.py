@@ -55,7 +55,7 @@ class ASRFusionClient:
             data['timestamp_granularities'] = timestamp_granularities
 
         # Make the request
-        response = requests.post(url, files=files, data=data)
+        response = requests.post(url, data=data)
         response.raise_for_status()
 
         return response.json()

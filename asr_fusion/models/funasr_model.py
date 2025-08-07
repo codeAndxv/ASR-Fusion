@@ -1,4 +1,4 @@
-from funasr import AutoModel
+
 from typing import Dict, Any, Generator
 import os
 
