@@ -1,3 +1,5 @@
+from configparser import ConfigParser
+
 import yaml
 from typing import Dict, Any
 from pathlib import Path
@@ -17,7 +19,6 @@ class Config:
         return self.config_data.get('server', {})
 
     def get_faster_whisper_config(self) -> Dict[str, Any]:
-        return self.config_data.get('engine').get('faster-whisper', {})
+        return self.config_data.get('engine', {}).get('faster-whisper', {})
 
-config = Config()
-print(config.get_faster_whisper_config())
+global_config = Config()

@@ -12,7 +12,7 @@ model_manager = ModelManager()
 @router.post("/transcriptions")
 async def transcribe_file(
     file: Optional[UploadFile] = File(None),
-    localfile_path: Optional[str] = Form(None),
+    file_path: Optional[str] = Form(None),
     model: str = Form("faster-whisper/large-v3"),
     chunking_strategy: Optional[str] = Form("auto"),
     include: Optional[List[str]] = Form(None),
@@ -43,11 +43,11 @@ async def transcribe_file(
         Transcription result in the specified format
     """
     # Validate that either file or localfile_path is provided
-    if file is None and localfile_path is None:
+    if file is None and file_path is None:
         raise HTTPException(status_code=400, detail="Either 'file' or 'localfile_path' must be provided")
     
     # Validate that only one of file or localfile_path is provided
-    if file is not None and localfile_path is not None:
+    if file is not None and file_path is not None:
         raise HTTPException(status_code=400, detail="Only one of 'file' or 'localfile_path' should be provided")
     
     # Validate response_format for specific models
@@ -78,9 +78,9 @@ async def transcribe_file(
             cleanup_files = [audio_file_path]
         else:
             # Use the provided local file path
-            if not os.path.exists(localfile_path):
-                raise HTTPException(status_code=400, detail=f"Local file not found: {localfile_path}")
-            audio_file_path = localfile_path
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=400, detail=f"Local file not found: {file_path}")
+            audio_file_path = file_path
             cleanup_files = []
         
         # Prepare transcription arguments
@@ -97,11 +97,11 @@ async def transcribe_file(
         result = model_manager.transcribe_file(model, audio_file_path, **kwargs)
         
         # Clean up temporary files if any
-        for file_path in cleanup_files:
-            try:
-                os.unlink(file_path)
-            except:
-                pass  # Ignore cleanup errors
+        # for file_path in cleanup_files:
+        #     try:
+        #         os.unlink(file_path)
+        #     except:
+        #         pass  # Ignore cleanup errors
         
         # Return result in the requested format
         if response_format == "json":

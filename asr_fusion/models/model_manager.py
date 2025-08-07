@@ -53,7 +53,6 @@ class ModelManager:
         if engine == "faster-whisper":
             model = FasterWhisperModel(
                 model_name=model_name,
-                model_path=settings.get("path", "."),
                 device=settings.get("device", "cpu"),
                 compute_type=settings.get("compute_type", "int8")
             )
