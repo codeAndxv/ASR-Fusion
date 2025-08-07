@@ -1,10 +1,21 @@
 server:
   host: localhost
   port: 8603
-  password: 123456
   model:
     - faster-whisper:
        - large-v3:   
            device: cpu
            compute_type: int8
+           path: "."
+       - small:
+           device: cpu
+           compute_type: int8
+           path: "."
+    - funasr:
+       - damo/speech_campplus_sv_zh-cn_16k-common:
+           device: cpu
+           path: "."
+    - sensevoice:
+       - sensevoice-small:
+           device: cpu
            path: "."

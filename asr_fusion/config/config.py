@@ -1,68 +1,39 @@
-import json
-import os
+import yaml
 from typing import Dict, Any
+from pathlib import Path
 
 class Config:
-    def __init__(self, config_file: str = "config.json"):
-        self.config_file = config_file
-        self.default_config = {
-            "model_type": "faster-whisper",  # faster-whisper or funasr
-            "model_size": "small",  # tiny, base, small, medium, large
-            "device": "cpu",  # cpu or cuda
-            "compute_type": "int8"  # int8, float16, float32
-        }
-        self.config = self.load_config()
-
-    def load_config(self) -> Dict[str, Any]:
-        """Load configuration from file or use default"""
-        if os.path.exists(self.config_file):
-            try:
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    # Merge with default config to ensure all keys exist
-                    merged_config = self.default_config.copy()
-                    merged_config.update(config)
-                    return merged_config
-            except Exception as e:
-                print(f"Error loading config file: {e}")
-                return self.default_config.copy()
-        else:
-            # Create default config file
-            self.save_config(self.default_config)
-            return self.default_config.copy()
-
-    def save_config(self, config: Dict[str, Any]) -> None:
-        """Save configuration to file"""
-        try:
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=4, ensure_ascii=False)
-        except Exception as e:
-            print(f"Error saving config file: {e}")
-
-    def get(self, key: str, default=None):
-        """Get configuration value"""
-        return self.config.get(key, default)
-
-    def set(self, key: str, value: Any) -> None:
-        """Set configuration value"""
-        self.config[key] = value
-
-    def update_config(self, new_config: Dict[str, Any]) -> bool:
-        """Update configuration with new values"""
-        try:
-            # Validate new config
-            for key in new_config:
-                if key not in self.default_config:
-                    raise ValueError(f"Invalid configuration key: {key}")
-            
-            # Update config
-            self.config.update(new_config)
-            self.save_config(self.config)
-            return True
-        except Exception as e:
-            print(f"Error updating config: {e}")
-            return False
-
-    def get_all(self) -> Dict[str, Any]:
-        """Get all configuration"""
-        return self.config.copy()
+    def __init__(self, config_path: str = "config.yaml"):
+        self.config_path = Path(config_path)
+        self.config_data = self._load_config()
+    
+    def _load_config(self) -> Dict[Any, Any]:
+        """Load configuration from YAML file"""
+        with open(self.config_path, 'r', encoding='utf-8') as file:
+            return yaml.safe_load(file)
+    
+    def get_server_config(self) -> Dict[str, Any]:
+        """Get server configuration"""
+        return self.config_data.get('server', {})
+    
+    def get_model_config(self) -> Dict[str, Any]:
+        """Get model configuration"""
+        return self.config_data.get('server', {}).get('model', {})
+    
+    def get_model_settings(self, model_name: str) -> Dict[str, Any]:
+        """Get specific model settings by name"""
+        models = self.get_model_config()
+        if isinstance(models, list):
+            for model_entry in models:
+                if isinstance(model_entry, dict):
+                    for engine, model_configs in model_entry.items():
+                        if isinstance(model_configs, list):
+                            for model_config in model_configs:
+                                if isinstance(model_config, dict):
+                                    for model_key, settings in model_config.items():
+                                        if model_key == model_name:
+                                            return {
+                                                "engine": engine,
+                                                "settings": settings
+                                            }
+        return {}

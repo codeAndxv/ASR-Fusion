@@ -1,57 +1,107 @@
 from typing import Dict, Any, Optional
+from asr_fusion.config.config import Config
 from asr_fusion.models.faster_whisper_model import FasterWhisperModel
 from asr_fusion.models.funasr_model import FunASRModel
-from asr_fusion.config.config import Config
+from asr_fusion.models.sensevoice_model import SenseVoiceModel
 
 class ModelManager:
-    def __init__(self, config: Config):
-        self.config = config
-        self.current_model = None
-        self.current_model_type = None
-        self.load_model()
-
-    def load_model(self) -> None:
-        """Load the model based on configuration"""
-        model_type = self.config.get("model_type", "faster-whisper")
+    def __init__(self, config_path: str = "config.yaml"):
+        """
+        Initialize ModelManager
         
-        # If the model type hasn't changed, no need to reload
-        if self.current_model and self.current_model_type == model_type:
-            return
+        Args:
+            config_path: Path to the configuration file
+        """
+        self.config = Config(config_path)
+        self.models = {}
+    
+    def load_model(self, model_identifier: str) -> Any:
+        """
+        Load a model based on the model identifier (e.g., "faster-whisper/large-v3")
+        
+        Args:
+            model_identifier: Model identifier in the format "engine/model_name"
+            
+        Returns:
+            Loaded model instance
+        """
+        if model_identifier in self.models:
+            return self.models[model_identifier]
+        
+        # Parse the model identifier
+        if "/" not in model_identifier:
+            raise ValueError("Model identifier must be in the format 'engine/model_name'")
+        
+        engine, model_name = model_identifier.split("/", 1)
+        
+        # Get model settings from config
+        model_settings = self.config.get_model_settings(model_name)
+        
+        # If model settings not found in config, use defaults
+        if not model_settings:
+            settings = {}
+            engine_from_config = engine
+        else:
+            settings = model_settings.get("settings", {})
+            engine_from_config = model_settings.get("engine", engine)
+        
+        # Override engine if specified in model identifier
+        if engine != engine_from_config:
+            print(f"Warning: Engine mismatch. Using '{engine}' from identifier instead of '{engine_from_config}' from config.")
         
         # Load the appropriate model
-        if model_type == "faster-whisper":
-            self.current_model = FasterWhisperModel(self.config.get_all())
-            self.current_model_type = "faster-whisper"
-            print("Loaded faster-whisper model")
-        elif model_type == "funasr":
-            self.current_model = FunASRModel(self.config.get_all())
-            self.current_model_type = "funasr"
-            print("Loaded FunASR model")
+        if engine == "faster-whisper":
+            model = FasterWhisperModel(
+                model_name=model_name,
+                model_path=settings.get("path", "."),
+                device=settings.get("device", "cpu"),
+                compute_type=settings.get("compute_type", "int8")
+            )
+        elif engine == "funasr":
+            model = FunASRModel(
+                model_name=model_name,
+                model_path=settings.get("path", "."),
+                device=settings.get("device", "cpu")
+            )
+        elif engine == "sensevoice":
+            model = SenseVoiceModel(
+                model_name=model_name,
+                model_path=settings.get("path", "."),
+                device=settings.get("device", "cpu")
+            )
         else:
-            raise ValueError(f"Unsupported model type: {model_type}")
-
-    def transcribe_file(self, audio_file_path: str, **kwargs) -> Dict[str, Any]:
-        """Transcribe an audio file using the current model"""
-        if not self.current_model:
-            self.load_model()
+            raise ValueError(f"Unsupported engine: {engine}")
         
-        return self.current_model.transcribe_file(audio_file_path, **kwargs)
-
-    def transcribe_stream(self, audio_stream, **kwargs) -> Dict[str, Any]:
-        """Transcribe an audio stream using the current model"""
-        if not self.current_model:
-            self.load_model()
+        # Cache the model
+        self.models[model_identifier] = model
+        return model
+    
+    def transcribe_file(self, model_identifier: str, audio_file_path: str, **kwargs) -> Dict[str, Any]:
+        """
+        Transcribe an audio file using the specified model
         
-        return self.current_model.transcribe_stream(audio_stream, **kwargs)
-
-    def update_config(self, new_config: Dict[str, Any]) -> bool:
-        """Update configuration and reload model if necessary"""
-        success = self.config.update_config(new_config)
-        if success:
-            # Reload model if model type or other relevant config changed
-            self.load_model()
-        return success
-
-    def get_current_model_type(self) -> str:
-        """Get the current model type"""
-        return self.current_model_type if self.current_model_type else "none"
+        Args:
+            model_identifier: Model identifier in the format "engine/model_name"
+            audio_file_path: Path to the audio file
+            **kwargs: Additional arguments for transcription
+            
+        Returns:
+            Dictionary with transcription result
+        """
+        model = self.load_model(model_identifier)
+        return model.transcribe_file(audio_file_path, **kwargs)
+    
+    def transcribe_stream(self, model_identifier: str, audio_chunks, **kwargs) -> Dict[str, Any]:
+        """
+        Transcribe audio stream using the specified model
+        
+        Args:
+            model_identifier: Model identifier in the format "engine/model_name"
+            audio_chunks: Audio chunks generator
+            **kwargs: Additional arguments for transcription
+            
+        Returns:
+            Dictionary with transcription result
+        """
+        model = self.load_model(model_identifier)
+        return model.transcribe_stream(audio_chunks, **kwargs)

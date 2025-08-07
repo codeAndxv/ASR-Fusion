@@ -1,81 +1,86 @@
 #!/usr/bin/env python3
 """
-Test script for ASR Fusion
+Test script to verify ASR Fusion functionality
 """
 
-import json
 import os
-from asr_fusion import Transcriber
+import sys
+import time
+import subprocess
+import requests
+import threading
 
-def test_sdk():
-    """Test SDK functionality"""
-    print("Testing ASR Fusion SDK...")
+def test_server_startup():
+    """Test if the server starts correctly"""
+    print("Testing server startup...")
     
-    # Initialize transcriber
-    transcriber = Transcriber()
+    # Start the server in a separate process
+    server_process = subprocess.Popen([
+        sys.executable, "main.py", "--host", "localhost", "--port", "8603"
+    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     
-    # Get current config
-    config = transcriber.get_config()
-    print(f"Current config: {config}")
+    # Wait a bit for the server to start
+    time.sleep(5)
     
-    # Test faster-whisper model
-    print("\nTesting faster-whisper model...")
-    success = transcriber.set_model("faster-whisper", "tiny")
-    if success:
-        print("Successfully set model to faster-whisper")
-        config = transcriber.get_config()
-        print(f"Updated config: {config}")
-    else:
-        print("Failed to set model to faster-whisper")
-    
-    # Test funasr model
-    print("\nTesting FunASR model...")
-    success = transcriber.set_model("funasr", "small")
-    if success:
-        print("Successfully set model to FunASR")
-        config = transcriber.get_config()
-        print(f"Updated config: {config}")
-    else:
-        print("Failed to set model to FunASR")
+    try:
+        # Check if server is responding
+        response = requests.get("http://localhost:8603/health")
+        if response.status_code == 200:
+            print("✓ Server started successfully")
+            print("✓ Health check passed")
+            return server_process
+        else:
+            print("✗ Health check failed")
+            return None
+    except requests.exceptions.ConnectionError:
+        print("✗ Could not connect to server")
+        return None
 
-def test_api_compatibility():
-    """Test API compatibility"""
-    print("\nTesting API compatibility...")
+def test_api_endpoints():
+    """Test API endpoints"""
+    print("\nTesting API endpoints...")
     
-    # This would typically be done with actual API calls
-    # For now, we'll just show the expected API structure
+    try:
+        # Test root endpoint
+        response = requests.get("http://localhost:8603/")
+        if response.status_code == 200:
+            print("✓ Root endpoint working")
+        else:
+            print("✗ Root endpoint failed")
+            
+        # Test health endpoint
+        response = requests.get("http://localhost:8603/health")
+        if response.status_code == 200:
+            print("✓ Health endpoint working")
+        else:
+            print("✗ Health endpoint failed")
+            
+    except Exception as e:
+        print(f"✗ API endpoint test failed: {e}")
+
+def main():
+    print("ASR Fusion Test Suite")
+    print("=" * 30)
     
-    # Transcription endpoint
-    transcription_request = {
-        "file": "audio.wav",
-        "model": "small",
-        "language": "zh",
-        "prompt": "optional prompt",
-        "response_format": "json",
-        "temperature": 0
-    }
+    # Check if audio file exists
+    audio_file = "record_sys_250725_143258.m4a"
+    if not os.path.exists(audio_file):
+        print(f"Warning: Test audio file '{audio_file}' not found")
+        print("Some tests will be skipped")
     
-    print("Transcription request format:")
-    print(json.dumps(transcription_request, indent=2, ensure_ascii=False))
+    # Test server startup
+    server_process = test_server_startup()
     
-    # Translation endpoint
-    translation_request = {
-        "file": "audio.wav",
-        "model": "small",
-        "prompt": "optional prompt",
-        "response_format": "json",
-        "temperature": 0
-    }
-    
-    print("\nTranslation request format:")
-    print(json.dumps(translation_request, indent=2, ensure_ascii=False))
-    
-    # Config endpoints
-    print("\nConfig endpoints:")
-    print("GET /v1/config - Get current configuration")
-    print("POST /v1/config - Update configuration")
+    if server_process:
+        # Test API endpoints
+        test_api_endpoints()
+        
+        # Terminate the server
+        server_process.terminate()
+        server_process.wait()
+        print("\nServer stopped")
+    else:
+        print("Server failed to start, skipping API tests")
 
 if __name__ == "__main__":
-    test_sdk()
-    test_api_compatibility()
-    print("\nTest completed!")
+    main()

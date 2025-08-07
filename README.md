@@ -1,129 +1,139 @@
 # ASR Fusion
 
-ASR Fusion 是一个支持多种自动语音识别（ASR）模型的Python库，既可以作为独立的API服务器运行，也可以作为SDK包在其他项目中使用。
+ASR Fusion is a Python package for audio transcription using multiple ASR (Automatic Speech Recognition) models. It provides a unified API interface that supports various ASR engines including Faster Whisper, FunASR, and SenseVoice.
 
-## 功能特点
+## Features
 
-- 支持 faster-whisper 和 FunASR 两种主流ASR模型
-- 提供与OpenAI API兼容的接口
-- 可配置模型类型、大小和运行设备
-- 支持文件转录和流式转录
-- 既可以作为服务器运行，也可以作为SDK包使用
+- Support for multiple ASR engines (Faster Whisper, FunASR, SenseVoice)
+- RESTful API server with OpenAI-compatible endpoints
+- File and streaming transcription support
+- Multiple output formats (JSON, text, SRT, VTT)
+- Easy model switching via model identifiers
+- Configuration-based model management
 
-## 安装
-
-使用uv进行安装：
-
-```bash
-uv pip install -e .
-```
-
-## 快速开始
-
-### 作为API服务器运行
+## Installation
 
 ```bash
-python main.py --server --host 0.0.0.0 --port 8000
+# Clone the repository
+git clone <repository-url>
+cd asr-fusion
+
+# Install dependencies
+pip install -e .
 ```
 
-服务器启动后，可以通过以下端点访问：
+## Quick Start
 
-- `POST /v1/audio/transcriptions` - 音频转录
-- `POST /v1/audio/translations` - 音频翻译
-- `GET /v1/config` - 获取当前配置
-- `POST /v1/config` - 更新配置
+### 1. Start the API Server
 
-### 作为SDK包使用
+```bash
+python main.py --host localhost --port 8603
+```
+
+Or using uvicorn directly:
+
+```bash
+uvicorn asr_fusion.api.server:app --host localhost --port 8603 --reload
+```
+
+### 2. Test with Client
+
+```bash
+# Test with the provided client
+python client/faster_whisper_test.py
+```
+
+Or use the general test client:
+
+```bash
+python client/test_client.py --file path/to/audio.wav --model faster-whisper/large-v3
+```
+
+## API Usage
+
+The API follows the OpenAI speech recognition API format:
+
+### File Transcription
+
+```bash
+curl http://localhost:8603/v1/audio/transcriptions \
+  -H "Content-Type: multipart/form-data" \
+  -F file="@audio.wav" \
+  -F model="faster-whisper/large-v3"
+```
+
+### Parameters
+
+- `file`: Audio file to transcribe
+- `model`: Model identifier (e.g., "faster-whisper/large-v3")
+- `language`: Language code (optional)
+- `prompt`: Initial prompt for the transcription (optional)
+- `response_format`: Output format ("json", "text", "srt", "verbose_json", "vtt")
+- `temperature`: Sampling temperature (default: 0.0)
+- `timestamp_granularities`: Timestamp granularities (optional)
+
+## Supported Models
+
+- **Faster Whisper**: `faster-whisper/model-name`
+- **FunASR**: `funasr/model-name`
+- **SenseVoice**: `sensevoice/model-name`
+
+## Configuration
+
+The `config.yaml` file controls server and model settings:
+
+```yaml
+server:
+  host: localhost
+  port: 8603
+  model:
+    - faster-whisper:
+       - large-v3:   
+           device: cpu
+           compute_type: int8
+           path: "."
+```
+
+## SDK Usage
 
 ```python
-from asr_fusion import Transcriber
+from asr_fusion import ASRFusionClient
 
-# 初始化转录器
-transcriber = Transcriber()
+# Initialize client
+client = ASRFusionClient(base_url="http://localhost:8603")
 
-# 转录音频文件
-result = transcriber.transcribe_file("audio.wav")
-print(result["text"])
+# Transcribe file
+result = client.transcribe_file(
+    file_path="audio.wav",
+    model="faster-whisper/large-v3"
+)
 
-# 更换模型
-transcriber.set_model("funasr", "small")
-result = transcriber.transcribe_file("audio.wav")
-print(result["text"])
+print(result)
 ```
 
-## API接口
+## Development
 
-### 音频转录
+### Project Structure
 
-```bash
-curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@audio.wav" \
-  -F "model=small" \
-  -F "language=zh"
+```
+asr-fusion/
+├── asr_fusion/
+│   ├── api/           # API server implementation
+│   ├── routers/       # API route definitions
+│   ├── models/        # Model implementations
+│   ├── config/        # Configuration handling
+│   └── sdk/           # Client SDK
+├── client/            # Test clients
+├── config.yaml        # Configuration file
+└── main.py            # Entry point
 ```
 
-### 音频翻译
+### Adding New Models
 
-```bash
-curl -X POST "http://localhost:8000/v1/audio/translations" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@audio.wav" \
-  -F "model=small"
-```
+1. Create a new model implementation in `asr_fusion/models/`
+2. Update `asr_fusion/models/model_manager.py` to support the new model
+3. Add configuration to `config.yaml`
 
-### 配置管理
+## License
 
-获取当前配置：
-```bash
-curl -X GET "http://localhost:8000/v1/config"
-```
-
-更新配置：
-```bash
-curl -X POST "http://localhost:8000/v1/config" \
-  -H "Content-Type: application/json" \
-  -d '{"model_type": "funasr", "model_size": "small"}'
-```
-
-## 配置文件
-
-项目使用 `config.json` 文件进行配置：
-
-```json
-{
-    "model_type": "faster-whisper",
-    "model_size": "small",
-    "device": "cpu",
-    "compute_type": "int8"
-}
-```
-
-配置项说明：
-- `model_type`: 模型类型，可选 "faster-whisper" 或 "funasr"
-- `model_size`: 模型大小，可选 "tiny", "base", "small", "medium", "large"
-- `device`: 运行设备，可选 "cpu" 或 "cuda"
-- `compute_type`: 计算类型，可选 "int8", "float16", "float32"
-
-## 命令行工具
-
-```bash
-# 作为服务器运行
-python main.py --server
-
-# 转录音频文件
-python main.py --transcribe audio.wav
-
-# 使用指定模型转录
-python main.py --transcribe audio.wav --model-type funasr --model-size small
-```
-
-## 依赖
-
-- faster-whisper
-- funasr
-- fastapi
-- uvicorn
-- python-multipart
-
-
+MIT License
