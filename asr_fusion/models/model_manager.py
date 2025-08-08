@@ -34,39 +34,28 @@ class ModelManager:
         
         engine, model_name = model_identifier.split("/", 1)
         
-        # Get model settings from config
-        model_settings = self.config.get_model_settings(model_name)
-        
-        # If model settings not found in config, use defaults
-        if not model_settings:
-            settings = {}
-            engine_from_config = engine
-        else:
-            settings = model_settings.get("settings", {})
-            engine_from_config = model_settings.get("engine", engine)
-        
-        # Override engine if specified in model identifier
-        if engine != engine_from_config:
-            print(f"Warning: Engine mismatch. Using '{engine}' from identifier instead of '{engine_from_config}' from config.")
+        # Get engine-specific configuration
+        model_settings = self.config.get_model_config(engine, model_name)
         
         # Load the appropriate model
         if engine == "faster-whisper":
             model = FasterWhisperModel(
                 model_name=model_name,
-                device=settings.get("device", "cpu"),
-                compute_type=settings.get("compute_type", "int8")
+                model_path=model_settings.get("path", model_name),
+                device=model_settings.get("device", "cpu"),
+                compute_type=model_settings.get("compute_type", "int8")
             )
         elif engine == "funasr":
             model = FunASRModel(
                 model_name=model_name,
-                model_path=settings.get("path", "."),
-                device=settings.get("device", "cpu")
+                model_path=model_settings.get("path", model_name),
+                device=model_settings.get("device", "cpu")
             )
         elif engine == "sensevoice":
             model = SenseVoiceModel(
                 model_name=model_name,
-                model_path=settings.get("path", "."),
-                device=settings.get("device", "cpu")
+                model_path=model_settings.get("path", model_name),
+                device=model_settings.get("device", "cpu")
             )
         else:
             raise ValueError(f"Unsupported engine: {engine}")
@@ -104,3 +93,4 @@ class ModelManager:
         """
         model = self.load_model(model_identifier)
         return model.transcribe_stream(audio_chunks, **kwargs)
+

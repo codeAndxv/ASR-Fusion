@@ -15,7 +15,7 @@ def main():
     client = ASRFusionClient(base_url="http://localhost:8603")
     
     # Audio file to transcribe
-    audio_file = "../record_sys_250725_143258.m4a"
+    audio_file = "/Users/dudu/Files/Project/github/codeAndxv/ASR-Fusion/record_sys_250725_143258.m4a"
     
     # Check if file exists
     if not os.path.exists(audio_file):

@@ -18,7 +18,11 @@ class Config:
         """Get server configuration"""
         return self.config_data.get('server', {})
 
-    def get_faster_whisper_config(self) -> Dict[str, Any]:
-        return self.config_data.get('engine', {}).get('faster-whisper', {})
+    def get_engine_config(self, engine_name: str) -> Dict[str, Any]:
+        """Get configuration for a specific engine"""
+        return self.config_data.get('engine', {}).get(engine_name, {})
+
+    def get_model_config(self, engine_name: str, model_name: str) -> Dict[str, Any]:
+        return self.config_data.get('model', {}).get(engine_name, {}).get(model_name, {})
 
 global_config = Config()

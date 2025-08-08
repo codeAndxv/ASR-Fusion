@@ -2,12 +2,8 @@ from faster_whisper import WhisperModel
 from typing import Dict, Any, Generator
 import os
 
-class ASRModel:
-    def __init(self, model_name: str):
-        self.model_name = model_name
-
-class FasterWhisperModel(ASRModel):
-    def __init__(self, model_name: str, model_path: str = ".", device: str = "cpu", compute_type: str = "int8"):
+class FasterWhisperModel:
+    def __init__(self, model_name: str, model_path: str, device: str = "cpu", compute_type: str = "int8"):
         """
         Initialize FasterWhisper model
         
@@ -17,7 +13,7 @@ class FasterWhisperModel(ASRModel):
             device: Device to run the model on ("cpu" or "cuda")
             compute_type: Compute type for the model ("int8", "float16", etc.)
         """
-        super().__init__(model_name)
+        self.model_name = model_name
         self.model_path = model_path
         self.device = device
         self.compute_type = compute_type

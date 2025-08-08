@@ -5,8 +5,13 @@ engine:
   faster-whisper:
     device: cpu
     beam_size: 5
-    compute_type: int8
   funasr:
     device: cpu
   sensevoice:
     device: cpu
+model:
+  faster-whisper:
+    small:
+      path: small
+      compute_type: int8
+      beam_size: 5

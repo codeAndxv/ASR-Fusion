@@ -78,7 +78,7 @@ async def transcribe_file(
             cleanup_files = [audio_file_path]
         else:
             # Use the provided local file path
-            if not os.path.exists(file_path):
+            if file_path is not None and not os.path.exists(file_path):
                 raise HTTPException(status_code=400, detail=f"Local file not found: {file_path}")
             audio_file_path = file_path
             cleanup_files = []
@@ -132,6 +132,7 @@ async def transcribe_file(
     except HTTPException:
         raise
     except Exception as e:
+        print(str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 def format_timestamp(seconds: float, vtt: bool = False) -> str:

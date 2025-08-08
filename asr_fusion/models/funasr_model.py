@@ -1,6 +1,7 @@
 
 from typing import Dict, Any, Generator
 import os
+from funasr import AutoModel
 
 class FunASRModel:
     def __init__(self, model_name: str, model_path: str = ".", device: str = "cpu"):
