@@ -67,7 +67,7 @@ class FasterWhisperModel:
                     })
 
             segments_list.append(segment_dict)
-        full_text = "".join(segment.text for segment in segments).strip()
+        full_text = "/n".join(segment.text for segment in segments).strip()
 
         transcription_result = {
             "task": "transcribe",
@@ -101,7 +101,7 @@ class FasterWhisperModel:
         full_text = ""
         
         for segment in segments:
-            full_text += segment.text
+            full_text = segment.text + "/n"
             yield {
                 "type":"transcript.text.delta",
                 "delta": segment.text,

@@ -78,7 +78,7 @@ async def transcribe_file(
         if stream:
             # Handle streaming response
             return StreamingResponse(
-                stream_transcription(model, audio_file_url, **kwargs),
+                transcribe_file_to_streaming(model, audio_file_url, **kwargs),
                 media_type="text/event-stream"
             )
         else:

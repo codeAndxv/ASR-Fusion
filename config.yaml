@@ -1,6 +1,6 @@
 server:
   host: localhost
-  port: 8603
+  port: 8604
 engine:
   faster-whisper:
     device: cpu

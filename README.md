@@ -62,6 +62,18 @@ curl http://localhost:8603/v1/audio/transcriptions \
   -F model="faster-whisper/large-v3"
 ```
 
+### Streaming Transcription
+
+To enable streaming, add the `stream=true` parameter:
+
+```bash
+curl http://localhost:8603/v1/audio/transcriptions \
+  -H "Content-Type: multipart/form-data" \
+  -F file="@audio.wav" \
+  -F model="faster-whisper/large-v3" \
+  -F stream="true"
+```
+
 ### Parameters
 
 - `file`: Audio file to transcribe
@@ -109,6 +121,21 @@ result = client.transcribe_file(
 )
 
 print(result)
+
+# Streaming transcription
+stream_result = client.transcribe_file(
+    file_path="audio.wav",
+    model="faster-whisper/large-v3",
+    stream=True
+)
+
+# Process streaming results
+for chunk in stream_result:
+    if chunk["type"] == "transcript.text.delta":
+        print(f"Partial result: {chunk['delta']}")
+    elif chunk["type"] == "transcript.text.done":
+        print(f"Final result: {chunk['text']}")
+```
 ```
 
 ## Development
