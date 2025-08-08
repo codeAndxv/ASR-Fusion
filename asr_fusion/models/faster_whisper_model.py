@@ -1,6 +1,7 @@
 from faster_whisper import WhisperModel
-from typing import Dict, Any, Generator
+from typing import Dict, Any, Generator, List
 import os
+import json
 
 class FasterWhisperModel:
     def __init__(self, model_name: str, model_path: str, device: str = "cpu", compute_type: str = "int8"):
@@ -19,7 +20,7 @@ class FasterWhisperModel:
         self.compute_type = compute_type
 
         self.model = WhisperModel(model_path, device=device, compute_type=compute_type)
-    
+
     def transcribe_file(self, audio_file_path: str, **kwargs) -> Dict[str, Any]:
         """
         Transcribe an audio file
@@ -31,10 +32,16 @@ class FasterWhisperModel:
         Returns:
             Dictionary with transcription result
         """
-        segments, info = self.model.transcribe(audio_file_path, **kwargs)
+        timestamp_granularities = ["segments"]
+        if "timestamp_granularities" in kwargs:
+            timestamp_granularities = kwargs["timestamp_granularities"]
+
+        print(f"Faster-Whisper start transcribe file: {audio_file_path}")
+        segments, transcription_info = self.model.transcribe(audio_file_path, **kwargs)
         
         # Convert segments to the desired format
         segments_list = []
+        words_list = []
         for segment in segments:
             segment_dict = {
                 "id": segment.id,
@@ -48,10 +55,9 @@ class FasterWhisperModel:
                 "compression_ratio": segment.compression_ratio,
                 "no_speech_prob": segment.no_speech_prob
             }
-            
+
             # Add word-level timestamps if available
             if hasattr(segment, 'words') and segment.words:
-                words_list = []
                 for word in segment.words:
                     words_list.append({
                         "start": word.start,
@@ -59,28 +65,54 @@ class FasterWhisperModel:
                         "word": word.word,
                         "probability": word.probability
                     })
-                segment_dict["words"] = words_list
-                
+
             segments_list.append(segment_dict)
-        
-        return {
+        full_text = "".join(segment.text for segment in segments).strip()
+
+        transcription_result = {
             "task": "transcribe",
-            "language": info.language,
-            "duration": info.duration,
-            "segments": segments_list
+            "language": transcription_info.language,
+            "duration": transcription_info.duration,
+            "text": full_text,
         }
-    
-    def transcribe_stream(self, audio_chunks: Generator[bytes, None, None], **kwargs) -> Dict[str, Any]:
+
+        if "segments" in timestamp_granularities:
+            transcription_result["segments"] = segments_list
+        if "word" in timestamp_granularities:
+            transcription_result["words"] = words_list
+        return transcription_result
+
+    def transcribe_file_to_streaming(self, audio_file_path: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
-        Transcribe audio stream (stub implementation)
+        Transcribe audio stream and yield results in OpenAI format
         
         Args:
-            audio_chunks: Generator yielding audio chunks
+            audio_file_path: Path to the audio file
             **kwargs: Additional arguments for transcription
             
-        Returns:
-            Dictionary with transcription result
+        Yields:
+            Dictionary with transcription result in OpenAI format
         """
-        # This is a simplified implementation
-        # In a real implementation, you would need to handle streaming properly
-        raise NotImplementedError("Streaming transcription not yet implemented for FasterWhisper")
+
+        print(f"Faster-Whisper start transcribe file: {audio_file_path}")
+        segments, transcription_info = self.model.transcribe(audio_file_path, **kwargs)
+        
+        # Collect all segments and their words
+        full_text = ""
+        
+        for segment in segments:
+            full_text += segment.text
+            yield {
+                "type":"transcript.text.delta",
+                "delta": segment.text,
+            }
+        full_text = full_text.strip()
+
+        # Yield final result
+        yield {
+            "type": "transcript.text.done",
+            "language": transcription_info.language,
+            "duration": transcription_info.duration,
+            "text": full_text,
+        }
+

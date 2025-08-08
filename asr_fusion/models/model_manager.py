@@ -79,18 +79,17 @@ class ModelManager:
         model = self.load_model(model_identifier)
         return model.transcribe_file(audio_file_path, **kwargs)
     
-    def transcribe_stream(self, model_identifier: str, audio_chunks, **kwargs) -> Dict[str, Any]:
+    def transcribe_file_to_streaming(self, model_identifier: str, audio_file_url: str, **kwargs):
         """
         Transcribe audio stream using the specified model
         
         Args:
             model_identifier: Model identifier in the format "engine/model_name"
-            audio_chunks: Audio chunks generator
+            audio_file_url: Path to the audio file
             **kwargs: Additional arguments for transcription
             
         Returns:
-            Dictionary with transcription result
+            Generator yielding transcription results
         """
         model = self.load_model(model_identifier)
-        return model.transcribe_stream(audio_chunks, **kwargs)
-
+        return model.transcribe_file_to_streaming(audio_file_url, **kwargs)

@@ -1,7 +1,9 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
 import tempfile
 import os
-from typing import Optional, List
+import json
+from typing import Optional, List, Generator
 from asr_fusion.models.model_manager import ModelManager
 
 router = APIRouter(prefix="/v1/audio", tags=["audio"])
@@ -12,7 +14,7 @@ model_manager = ModelManager()
 @router.post("/transcriptions")
 async def transcribe_file(
     file: Optional[UploadFile] = File(None),
-    file_path: Optional[str] = Form(None),
+    file_url: Optional[str] = Form(None),
     model: str = Form("faster-whisper/large-v3"),
     chunking_strategy: Optional[str] = Form("auto"),
     include: Optional[List[str]] = Form(None),
@@ -43,44 +45,23 @@ async def transcribe_file(
         Transcription result in the specified format
     """
     # Validate that either file or localfile_path is provided
-    if file is None and file_path is None:
-        raise HTTPException(status_code=400, detail="Either 'file' or 'localfile_path' must be provided")
-    
-    # Validate that only one of file or localfile_path is provided
-    if file is not None and file_path is not None:
-        raise HTTPException(status_code=400, detail="Only one of 'file' or 'localfile_path' should be provided")
-    
-    # Validate response_format for specific models
-    # Note: In a real implementation, we would check the model type
-    # For now, we'll just validate the format is supported
-    supported_formats = ["json", "text", "srt", "verbose_json", "vtt"]
-    if response_format not in supported_formats:
-        raise HTTPException(status_code=400, detail=f"Unsupported response format: {response_format}")
-    
-    # Validate timestamp_granularities when response_format is not verbose_json
-    if timestamp_granularities and response_format != "verbose_json":
-        raise HTTPException(status_code=400, detail="timestamp_granularities can only be used with response_format 'verbose_json'")
-    
-    # Validate timestamp_granularities values
-    if timestamp_granularities:
-        for granularity in timestamp_granularities:
-            if granularity not in ["word", "segment"]:
-                raise HTTPException(status_code=400, detail=f"Invalid timestamp_granularity: {granularity}")
-    
+    if file is None and file_url is None:
+        raise HTTPException(status_code=400, detail="Either 'file' or 'file_url' must be provided")
+
     try:
         # Determine the audio file path to use
         if file is not None:
             # Save uploaded file to a temporary location
             with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
                 temp_file.write(await file.read())
-                audio_file_path = temp_file.name
+                audio_file_url = temp_file.name
             # Schedule cleanup of temporary file
-            cleanup_files = [audio_file_path]
+            cleanup_files = [audio_file_url]
         else:
             # Use the provided local file path
-            if file_path is not None and not os.path.exists(file_path):
-                raise HTTPException(status_code=400, detail=f"Local file not found: {file_path}")
-            audio_file_path = file_path
+            if file_url is not None and not os.path.exists(file_url):
+                raise HTTPException(status_code=400, detail=f"Local file not found: {file_url}")
+            audio_file_url = file_url
             cleanup_files = []
         
         # Prepare transcription arguments
@@ -94,56 +75,50 @@ async def transcribe_file(
             kwargs["timestamp_granularities"] = timestamp_granularities
         
         # Perform transcription
-        result = model_manager.transcribe_file(model, audio_file_path, **kwargs)
-        
-        # Clean up temporary files if any
-        # for file_path in cleanup_files:
-        #     try:
-        #         os.unlink(file_path)
-        #     except:
-        #         pass  # Ignore cleanup errors
-        
-        # Return result in the requested format
-        if response_format == "json":
-            return result
-        elif response_format == "text":
-            # Concatenate all segments for text format
-            text = "".join(segment["text"] for segment in result["segments"])
-            return text
-        elif response_format == "srt":
-            # Generate SRT format
-            srt_content = ""
-            for i, segment in enumerate(result["segments"], 1):
-                start = format_timestamp(segment["start"])
-                end = format_timestamp(segment["end"])
-                srt_content += f"{i}\n{start} --> {end}\n{segment['text']}\n\n"
-            return srt_content
-        elif response_format == "verbose_json":
-            return result
-        elif response_format == "vtt":
-            # Generate WebVTT format
-            vtt_content = "WEBVTT\n\n"
-            for segment in result["segments"]:
-                start = format_timestamp(segment["start"], vtt=True)
-                end = format_timestamp(segment["end"], vtt=True)
-                vtt_content += f"{start} --> {end}\n{segment['text']}\n\n"
-            return vtt_content
+        if stream:
+            # Handle streaming response
+            return StreamingResponse(
+                stream_transcription(model, audio_file_url, **kwargs),
+                media_type="text/event-stream"
+            )
+        else:
+            result = model_manager.transcribe_file(model, audio_file_url, **kwargs)
             
+            # Clean up temporary files if any
+            # for file_path in cleanup_files:
+            #     try:
+            #         os.unlink(file_path)
+            #     except:
+            #         pass  # Ignore cleanup errors
+            
+            # Return result in the requested format
+            if response_format == "json":
+                return result
+            elif response_format == "verbose_json":
+                return result
+
     except HTTPException:
         raise
     except Exception as e:
         print(str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
-def format_timestamp(seconds: float, vtt: bool = False) -> str:
-    """Format timestamp in SRT or VTT format"""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    seconds = seconds % 60
-    milliseconds = int((seconds - int(seconds)) * 1000)
-    seconds = int(seconds)
+
+def transcribe_file_to_streaming(model: str, audio_file_url: str, **kwargs) -> Generator[str, None, None]:
+    """
+    Stream transcription results in OpenAI format
     
-    if vtt:
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
-    else:
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
+    Args:
+        model: Model identifier
+        audio_file_url: Path to the audio file
+        **kwargs: Additional arguments for transcription
+        
+    Yields:
+        Formatted JSON strings in OpenAI streaming format
+    """
+    # Get streaming results from model manager
+    stream_results = model_manager.transcribe_file_to_streaming(model, audio_file_url, **kwargs)
+    
+    for result in stream_results:
+        # Format as data: JSON\n\n
+        yield f"data: {json.dumps(result, ensure_ascii=False)}\n\n"

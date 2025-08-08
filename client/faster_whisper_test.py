@@ -29,7 +29,7 @@ def main():
     try:
         # Transcribe file using Faster Whisper model
         result = client.transcribe_file(
-            file_path=audio_file,
+            file_url=audio_file,
             model="faster-whisper/small",
             response_format="json"
         )

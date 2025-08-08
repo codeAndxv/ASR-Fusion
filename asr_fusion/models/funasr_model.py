@@ -77,7 +77,7 @@ class FunASRModel:
             "segments": segments_list
         }
     
-    def transcribe_stream(self, audio_chunks: Generator[bytes, None, None], **kwargs) -> Dict[str, Any]:
+    def transcribe_file_to_streaming(self, audio_chunks: Generator[bytes, None, None], **kwargs) -> Dict[str, Any]:
         """
         Transcribe audio stream (stub implementation)
         
