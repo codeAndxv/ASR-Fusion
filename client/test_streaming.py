@@ -13,7 +13,7 @@ from client.transcriber import ASRFusionClient
 
 def main():
     # Initialize client
-    client = ASRFusionClient(base_url="http://localhost:8604")
+    client = ASRFusionClient(base_url="http://localhost:8603")
     
     # Audio file to transcribe
     audio_file = "/Users/dudu/Files/Project/github/codeAndxv/ASR-Fusion/record_sys_250725_143258.m4a"
