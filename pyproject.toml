@@ -17,6 +17,8 @@ dependencies = [
     "python-multipart>=0.0.20",
     "funasr>=1.2.6",
     "torchaudio>=2.7.1",
+    "soundfile>=0.13.1",
+    "librosa>=0.11.0",
 ]
 authors = [
     {name = "ASR Fusion Developers"}
